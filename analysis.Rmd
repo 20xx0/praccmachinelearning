@@ -1,0 +1,91 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Silver"
+date: "11/29/2020"
+output: html_document
+---
+
+```{r, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(randomForest)
+set.seed(9916)
+```
+
+# Quick summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+## Loading the data
+```{r}
+trainingRaw <- read.csv("pml-training.csv")
+testingRaw <- read.csv("pml-testing.csv")
+
+trainingEdit <- trainingRaw
+testing <- testingRaw
+```
+
+## Splitting and cleaning the data
+
+```{r, echo=FALSE}
+# Create validation set out of training set
+trainset <- createDataPartition(trainingEdit$classe, p = 0.75, list = FALSE)
+training <- trainingEdit[trainset, ]
+validate <- trainingEdit[-trainset, ]
+
+# Remove first 7 variables
+training <- training[,8:dim(training)[2]]
+testing <- testing[,8:dim(testing)[2]]
+
+# Remove NAs
+training <- training[,colSums(is.na(training))==0]
+testing <- testing[,colSums(is.na(testing))==0]
+
+# Remove near zero variables
+training <- training[, -nearZeroVar(training)]
+```
+
+## Creating models
+We choose to create two different machine learning algorithms and choose the more accurate one based on its accuracy on the validation set. The two choices shall be a linear discriminant analysis (LDA) approach and a random forests (RF) approach.
+
+```{r, cache=TRUE}
+ldaModel <- train(classe ~ .,data=training,method="lda")
+rfModel <- randomForest(as.factor(classe) ~ ., data = training)
+```
+
+### LDA model
+```{r, cache=TRUE, echo=FALSE}
+ldaPredTrain <- predict(ldaModel,training)
+ldaPredValid <- predict(ldaModel,validate)
+```
+
+```{r}
+ldaTrainMat <- confusionMatrix(ldaPredTrain,as.factor(training$classe))
+ldaValidMat <- confusionMatrix(ldaPredValid,as.factor(validate$classe))
+ldaTrainMat
+ldaValidMat
+```
+The accuracy of the model when predicting on the training set is `r ldaTrainMat$overall[1]`, and the out-of-sample error is `r 1-ldaTrainMat$overall[1]`. To control for overfitting, we predicted the model on the validation set. That gave an accuracy of `r ldaValidMat$overall[1]` and an out-of-sample error of `r 1-ldaValidMat$overall[1]`. This means that there was no overfitting in the model.
+
+### RF model
+
+```{r}
+rfPredTrain <- predict(rfModel,training)
+rfPredValid <- predict(rfModel,validate)
+```
+
+```{r}
+rfTrainMat <- confusionMatrix(rfPredTrain,as.factor(training$classe))
+rfValidMat <- confusionMatrix(rfPredValid,as.factor(validate$classe))
+rfTrainMat
+rfValidMat
+```
+The accuracy of the model when predicting on the training set is `r rfTrainMat$overall[1]`, which is expected with a random forest. To control for overfitting, we predicted the model on the validation set. That gave an accuracy of `r rfValidMat$overall[1]` and an out-of-sample error of `r 1-rfValidMat$overall[1]`. This means that there was no overfitting in the model and that it is highly accurate, thus we will choose the random forest model for our testing set as well.
+
+# Predicting results
+Now we shall use our random forests model to predict the values of "classe" based on the variables provided in the testing set.
+
+```{r}
+finalPred <- predict(rfModel,testing)
+finalPred
+```
